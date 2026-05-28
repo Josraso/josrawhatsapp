@@ -4,16 +4,18 @@
     {assign var='josra_href' value=$josra_wap_url}
     {assign var='josra_mobile_href' value=$josra_wap_mobile_url}
     {assign var='josra_title' value=$josra_wap_fields.above_text|default:'WhatsApp'}
+    {assign var='josra_extra_class' value=''}
 {else}
     {assign var='josra_href' value=$josra_offline_url|default:'#'}
     {assign var='josra_mobile_href' value=$josra_offline_url|default:'#'}
     {assign var='josra_title' value=$josra_offline_msg|default:'Fuera de horario'}
+    {assign var='josra_extra_class' value='josra-offline'}
 {/if}
 
 <div id="josra_whatsapp_button"
+     class="{$josra_extra_class}"
      style="
         text-align:center;
-        z-index:99999;
         position:fixed;
         bottom:15px;
         {if $josra_wap_fields.icon_pos == '1'}right{else}left{/if}:15px;
@@ -41,7 +43,7 @@
         <img src="{$josra_module_dir}views/img/icon{$josra_wap_fields.icon|intval}.png"
              width="{$josra_wap_fields.icon_size|intval}"
              height="{$josra_wap_fields.icon_size|intval}"
-             style="filter:hue-rotate({$josra_wap_fields.icon_color|intval}deg){if !$josra_is_online} grayscale(100%) opacity(0.6){/if};display:block;"
+             style="filter:hue-rotate({$josra_wap_fields.icon_color|intval}deg);display:block;"
              alt="WhatsApp" />
     </a>
 </div>

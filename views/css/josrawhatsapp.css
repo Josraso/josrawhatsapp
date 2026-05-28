@@ -8,8 +8,26 @@
 
 #josra_whatsapp_button {
     transition: transform 0.2s ease;
+    /* Siempre por encima de cualquier footer sticky, overlays, cookies, etc. */
+    z-index: 2147483647 !important;
 }
 
 #josra_whatsapp_button:hover {
     transform: scale(1.1);
+}
+
+/* Icono rojo en estado offline */
+#josra_whatsapp_button.josra-offline img {
+    filter: hue-rotate(220deg) !important;
+}
+
+/* Móvil: reducir tamaño un 30% */
+@media (max-width: 768px) {
+    #josra_whatsapp_button {
+        transform-origin: bottom right;
+    }
+    #josra_whatsapp_button img {
+        width: 70% !important;
+        height: auto !important;
+    }
 }
