@@ -1,0 +1,15 @@
+/* JosraWhatsapp - Estilos frontend */
+
+@keyframes josra_wap_pulse {
+    0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.5); }
+    50%  { transform: scale(1.08); box-shadow: 0 0 0 10px rgba(37, 211, 102, 0); }
+    100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }
+}
+
+#josra_whatsapp_button {
+    transition: transform 0.2s ease;
+}
+
+#josra_whatsapp_button:hover {
+    transform: scale(1.1);
+}
