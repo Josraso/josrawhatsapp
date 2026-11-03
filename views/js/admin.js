@@ -273,6 +273,32 @@
         refresh();
     }
 
+    /* ---------------- Fuera de horario ---------------- */
+
+    function initOfflineMode(root) {
+        var radios = all(root, 'input[name="JOSRA_WAP_OFFLINE_MODE"]');
+        if (!radios.length) { return; }
+
+        var extras = all(root, '.josra-offline-extra');
+
+        function refresh() {
+            var show = false;
+            for (var i = 0; i < radios.length; i++) {
+                if (radios[i].checked && radios[i].value === 'show') { show = true; }
+            }
+            for (var j = 0; j < extras.length; j++) {
+                extras[j].style.display = show ? '' : 'none';
+            }
+        }
+
+        for (var k = 0; k < radios.length; k++) {
+            radios[k].onchange = refresh;
+            radios[k].onclick = refresh;
+        }
+
+        refresh();
+    }
+
     onReady(function () {
         var root = document.querySelector('.josra-config');
         if (!root) { return; }
@@ -280,5 +306,6 @@
         initTabs(root);
         initSchedule();
         initPreview(root);
+        initOfflineMode(root);
     });
 }());

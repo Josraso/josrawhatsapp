@@ -26,7 +26,7 @@ class JosraWhatsapp extends Module
     {
         $this->name = 'josrawhatsapp';
         $this->tab = 'front_office_features';
-        $this->version = '1.3.0';
+        $this->version = '1.3.1';
         $this->author = 'josraso';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -83,6 +83,7 @@ class JosraWhatsapp extends Module
             'JOSRA_WAP_MOBILE_SCALE' => '70',
             'JOSRA_WAP_ANIMATE' => '0',
             'JOSRA_WAP_SCHEDULE_ENABLED' => '0',
+            'JOSRA_WAP_OFFLINE_MODE' => 'hide',
             'JOSRA_WAP_OFFLINE_MSG' => '',
             'JOSRA_WAP_OFFLINE_URL' => '',
         );
@@ -109,6 +110,7 @@ class JosraWhatsapp extends Module
             ),
             'programacion' => array(
                 'JOSRA_WAP_SCHEDULE_ENABLED',
+                'JOSRA_WAP_OFFLINE_MODE',
                 'JOSRA_WAP_OFFLINE_MSG',
                 'JOSRA_WAP_OFFLINE_URL',
             ),
@@ -157,6 +159,15 @@ class JosraWhatsapp extends Module
             if (!$this->isRegisteredInHook($hook)) {
                 $this->registerHook($hook);
             }
+        }
+
+        // Antes que los valores por defecto: hasta la 1.3.0 el boton se mostraba
+        // fuera de horario solo si habia mensaje o enlace. Al estrenar la opcion
+        // se respeta lo que la tienda estuviera haciendo hasta ahora.
+        if (Configuration::get('JOSRA_WAP_OFFLINE_MODE') === false) {
+            $seMostraba = trim(Configuration::get('JOSRA_WAP_OFFLINE_MSG')) !== ''
+                || trim(Configuration::get('JOSRA_WAP_OFFLINE_URL')) !== '';
+            Configuration::updateValue('JOSRA_WAP_OFFLINE_MODE', $seMostraba ? 'show' : 'hide');
         }
 
         foreach ($this->getDefaults() as $key => $value) {
@@ -301,7 +312,9 @@ class JosraWhatsapp extends Module
         foreach ($this->getTabFields($tab) as $key) {
             $value = Tools::getValue($key);
 
-            if (in_array($key, array('JOSRA_WAP_PHONE', 'JOSRA_WAP_ABOVE_TEXT', 'JOSRA_WAP_SEND_TEXT', 'JOSRA_WAP_OFFLINE_MSG', 'JOSRA_WAP_OFFLINE_URL'))) {
+            if ($key === 'JOSRA_WAP_OFFLINE_MODE') {
+                Configuration::updateValue($key, $value === 'show' ? 'show' : 'hide');
+            } elseif (in_array($key, array('JOSRA_WAP_PHONE', 'JOSRA_WAP_ABOVE_TEXT', 'JOSRA_WAP_SEND_TEXT', 'JOSRA_WAP_OFFLINE_MSG', 'JOSRA_WAP_OFFLINE_URL'))) {
                 Configuration::updateValue($key, trim($value));
             } else {
                 Configuration::updateValue($key, (int) $value);
@@ -678,18 +691,39 @@ class JosraWhatsapp extends Module
                         'html_content' => $this->renderScheduleGrid($schedule),
                     ),
                     array(
+                        'type' => 'radio',
+                        'label' => $this->l('Fuera de horario'),
+                        'name' => 'JOSRA_WAP_OFFLINE_MODE',
+                        'class' => 't josra-offline-mode',
+                        'desc' => $this->l('Que hace el boton cuando la tienda esta cerrada.'),
+                        'values' => array(
+                            array(
+                                'id' => 'offline_hide',
+                                'value' => 'hide',
+                                'label' => $this->l('Ocultarlo del todo'),
+                            ),
+                            array(
+                                'id' => 'offline_show',
+                                'value' => 'show',
+                                'label' => $this->l('Mostrarlo en rojo (no abre WhatsApp)'),
+                            ),
+                        ),
+                    ),
+                    array(
                         'type' => 'text',
                         'label' => $this->l('Mensaje fuera de horario'),
                         'name' => 'JOSRA_WAP_OFFLINE_MSG',
                         'placeholder' => $this->l('Ahora no estamos, dejanos tu mensaje'),
-                        'desc' => $this->l('Se muestra junto al icono fuera de horario. Si lo dejas vacio y tampoco pones enlace, el boton no aparece.'),
+                        'form_group_class' => 'josra-offline-extra',
+                        'desc' => $this->l('Se muestra junto al icono mientras la tienda esta cerrada. Dejalo vacio para mostrar solo el icono rojo.'),
                     ),
                     array(
                         'type' => 'text',
                         'label' => $this->l('Enlace fuera de horario'),
                         'name' => 'JOSRA_WAP_OFFLINE_URL',
                         'placeholder' => '/contactenos',
-                        'desc' => $this->l('A donde lleva el boton fuera de horario, por ejemplo la pagina de contacto. Dejalo vacio para que no enlace.'),
+                        'form_group_class' => 'josra-offline-extra',
+                        'desc' => $this->l('A donde lleva el boton mientras la tienda esta cerrada, por ejemplo la pagina de contacto. Dejalo vacio para que no se pueda pulsar.'),
                     ),
                 ),
                 'submit' => array('title' => $this->l('Guardar')),
@@ -815,12 +849,13 @@ class JosraWhatsapp extends Module
             $isOnline = $this->isOnSchedule($this->getSchedule());
 
             if (!$isOnline) {
-                $offlineMsg = $settings['JOSRA_WAP_OFFLINE_MSG'];
-                $offlineUrl = $settings['JOSRA_WAP_OFFLINE_URL'];
-
-                if ($offlineMsg === '' && $offlineUrl === '') {
+                // Fuera de horario: o se oculta, o se muestra en rojo
+                if ($settings['JOSRA_WAP_OFFLINE_MODE'] !== 'show') {
                     return '';
                 }
+
+                $offlineMsg = $settings['JOSRA_WAP_OFFLINE_MSG'];
+                $offlineUrl = $settings['JOSRA_WAP_OFFLINE_URL'];
 
                 if ($offlineUrl !== '' && Tools::substr($offlineUrl, 0, 1) === '/') {
                     $offlineUrl = Tools::getShopDomainSsl(true) . __PS_BASE_URI__ . ltrim($offlineUrl, '/');
