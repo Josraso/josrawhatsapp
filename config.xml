@@ -2,7 +2,7 @@
 <module>
     <name>josrawhatsapp</name>
     <displayName><![CDATA[JosraWhatsapp - Boton flotante WhatsApp]]></displayName>
-    <version><![CDATA[1.2.1]]></version>
+    <version><![CDATA[1.3.0]]></version>
     <description><![CDATA[Boton flotante de WhatsApp con programacion semanal de dos turnos.]]></description>
     <author><![CDATA[josraso]]></author>
     <tab><![CDATA[front_office_features]]></tab>

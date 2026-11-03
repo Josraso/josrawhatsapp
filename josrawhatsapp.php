@@ -26,7 +26,7 @@ class JosraWhatsapp extends Module
     {
         $this->name = 'josrawhatsapp';
         $this->tab = 'front_office_features';
-        $this->version = '1.2.1';
+        $this->version = '1.3.0';
         $this->author = 'josraso';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -38,9 +38,9 @@ class JosraWhatsapp extends Module
         $this->description = $this->l('Boton flotante de WhatsApp con programacion semanal de dos turnos.');
     }
 
-    /* ------------------------------------------------------------------
+    /* ==================================================================
      * Instalacion
-     * ------------------------------------------------------------------ */
+     * ================================================================== */
 
     public function install()
     {
@@ -67,10 +67,7 @@ class JosraWhatsapp extends Module
         return parent::uninstall();
     }
 
-    /**
-     * Valores por defecto de todos los ajustes simples.
-     * Es la unica lista: la usan install(), uninstall(), el reset y la lectura.
-     */
+    /** Unica lista de ajustes: la usan install, uninstall, el reset y la lectura */
     protected function getDefaults()
     {
         return array(
@@ -89,6 +86,35 @@ class JosraWhatsapp extends Module
             'JOSRA_WAP_OFFLINE_MSG' => '',
             'JOSRA_WAP_OFFLINE_URL' => '',
         );
+    }
+
+    /** Que ajustes guarda cada pestana, para que guardar una no pise las otras */
+    protected function getTabFields($tab)
+    {
+        $map = array(
+            'general' => array(
+                'JOSRA_WAP_ENABLED',
+                'JOSRA_WAP_PHONE',
+                'JOSRA_WAP_ABOVE_TEXT',
+                'JOSRA_WAP_SEND_TEXT',
+                'JOSRA_WAP_SEND_URL',
+            ),
+            'apariencia' => array(
+                'JOSRA_WAP_ICON',
+                'JOSRA_WAP_ICON_COLOR',
+                'JOSRA_WAP_ICON_SIZE',
+                'JOSRA_WAP_MOBILE_SCALE',
+                'JOSRA_WAP_ICON_POS',
+                'JOSRA_WAP_ANIMATE',
+            ),
+            'programacion' => array(
+                'JOSRA_WAP_SCHEDULE_ENABLED',
+                'JOSRA_WAP_OFFLINE_MSG',
+                'JOSRA_WAP_OFFLINE_URL',
+            ),
+        );
+
+        return isset($map[$tab]) ? $map[$tab] : array();
     }
 
     /** Horario por defecto: L-V de 09:00 a 14:00, fin de semana cerrado */
@@ -124,7 +150,6 @@ class JosraWhatsapp extends Module
     /**
      * Autorreparacion: al subir el modulo por FTP sin reinstalar, los hooks
      * nuevos no quedan registrados y los ajustes nuevos no existen.
-     * Esto lo arregla solo al abrir la configuracion.
      */
     protected function repair()
     {
@@ -145,14 +170,10 @@ class JosraWhatsapp extends Module
         }
     }
 
-    /* ------------------------------------------------------------------
+    /* ==================================================================
      * Lectura de ajustes
-     * ------------------------------------------------------------------ */
+     * ================================================================== */
 
-    /**
-     * Devuelve todos los ajustes simples, mezclando lo guardado con los
-     * valores por defecto para que nunca falte una clave.
-     */
     public function getSettings()
     {
         $settings = array();
@@ -165,7 +186,6 @@ class JosraWhatsapp extends Module
         return $settings;
     }
 
-    /** Horario guardado, completado dia a dia con los valores por defecto */
     public function getSchedule()
     {
         $saved = json_decode(Configuration::get('JOSRA_WAP_SCHEDULE'), true);
@@ -183,96 +203,114 @@ class JosraWhatsapp extends Module
         return $schedule;
     }
 
-    /* ------------------------------------------------------------------
+    /* ==================================================================
      * Configuracion (Modulos > Configurar)
-     * ------------------------------------------------------------------ */
+     * ================================================================== */
 
     public function getContent()
     {
         $this->repair();
 
         $output = '';
+        $activeTab = 'general';
 
         if (Tools::isSubmit('submitJosraWhatsappDefaults')) {
             $this->setDefaults();
-            $output .= $this->displayConfirmation(
-                $this->l('Configuracion restablecida a los valores por defecto.')
-            );
-        } elseif (Tools::isSubmit('submitJosraWhatsapp')) {
-            $errors = $this->saveSettings();
-
-            if (count($errors)) {
-                foreach ($errors as $error) {
-                    $output .= $this->displayError($error);
-                }
-            } else {
-                $output .= $this->displayConfirmation($this->l('Configuracion guardada correctamente.'));
-            }
+            $output .= $this->displayConfirmation($this->l('Configuracion restablecida a los valores por defecto.'));
+        } elseif (Tools::isSubmit('submitJosraGeneral')) {
+            $activeTab = 'general';
+            $output .= $this->processSave('general');
+        } elseif (Tools::isSubmit('submitJosraApariencia')) {
+            $activeTab = 'apariencia';
+            $output .= $this->processSave('apariencia');
+        } elseif (Tools::isSubmit('submitJosraProgramacion')) {
+            $activeTab = 'programacion';
+            $output .= $this->processSave('programacion');
         }
 
         $this->context->controller->addCSS($this->_path . 'views/css/admin.css');
         $this->context->controller->addJS($this->_path . 'views/js/admin.js');
 
-        return $output . $this->renderForm();
+        return $output . $this->renderTabs($activeTab);
     }
 
-    /**
-     * Guarda el formulario. Devuelve un array de errores (vacio si todo fue bien),
-     * cada uno diciendo que ha pasado y por que.
-     */
-    protected function saveSettings()
+    /** Guarda una pestana y devuelve el aviso de exito o los errores */
+    protected function processSave($tab)
+    {
+        $errors = $this->validateTab($tab);
+
+        if (count($errors)) {
+            $out = '';
+            foreach ($errors as $error) {
+                $out .= $this->displayError($error);
+            }
+
+            return $out;
+        }
+
+        $this->saveTab($tab);
+
+        return $this->displayConfirmation($this->l('Cambios guardados.'));
+    }
+
+    protected function validateTab($tab)
     {
         $errors = array();
 
-        $phone = trim(Tools::getValue('JOSRA_WAP_PHONE'));
-        $size = (int) Tools::getValue('JOSRA_WAP_ICON_SIZE');
-        $scale = (int) Tools::getValue('JOSRA_WAP_MOBILE_SCALE');
-        $color = (int) Tools::getValue('JOSRA_WAP_ICON_COLOR');
-        $offlineUrl = trim(Tools::getValue('JOSRA_WAP_OFFLINE_URL'));
+        if ($tab === 'general') {
+            $phone = trim(Tools::getValue('JOSRA_WAP_PHONE'));
 
-        if ($phone === '') {
-            $errors[] = $this->l('No se ha guardado: el numero de telefono esta vacio y sin el el boton no puede abrir WhatsApp.');
-        } elseif (!preg_match('/^\+?[0-9]{6,20}$/', $phone)) {
-            $errors[] = $this->l('No se ha guardado: el telefono solo puede llevar numeros (y un + inicial), con el prefijo del pais y sin espacios. Ejemplo: 34612345678.');
+            if ($phone === '') {
+                $errors[] = $this->l('No se ha guardado: el numero de telefono esta vacio y sin el el boton no puede abrir WhatsApp.');
+            } elseif (!preg_match('/^\+?[0-9]{6,20}$/', $phone)) {
+                $errors[] = $this->l('No se ha guardado: el telefono solo puede llevar numeros (y un + inicial), con el prefijo del pais y sin espacios. Ejemplo: 34612345678.');
+            }
         }
 
-        if ($size < 30 || $size > 200) {
-            $errors[] = $this->l('No se ha guardado: el tamano del icono debe estar entre 30 y 200 px.');
+        if ($tab === 'apariencia') {
+            $size = (int) Tools::getValue('JOSRA_WAP_ICON_SIZE');
+            $scale = (int) Tools::getValue('JOSRA_WAP_MOBILE_SCALE');
+            $color = (int) Tools::getValue('JOSRA_WAP_ICON_COLOR');
+
+            if ($size < 30 || $size > 200) {
+                $errors[] = $this->l('No se ha guardado: el tamano del icono debe estar entre 30 y 200 px.');
+            }
+            if ($scale < 30 || $scale > 100) {
+                $errors[] = $this->l('No se ha guardado: el tamano en movil debe estar entre 30 y 100 % del tamano normal.');
+            }
+            if ($color < 0 || $color > 360) {
+                $errors[] = $this->l('No se ha guardado: el giro de color debe estar entre 0 y 360 grados.');
+            }
         }
 
-        if ($scale < 30 || $scale > 100) {
-            $errors[] = $this->l('No se ha guardado: el tamano en movil debe estar entre 30 y 100 % del tamano normal.');
+        if ($tab === 'programacion') {
+            $offlineUrl = trim(Tools::getValue('JOSRA_WAP_OFFLINE_URL'));
+
+            if ($offlineUrl !== '' && !$this->isValidOfflineUrl($offlineUrl)) {
+                $errors[] = $this->l('No se ha guardado: el enlace fuera de horario debe empezar por / o por http:// o https://.');
+            }
+
+            $errors = array_merge($errors, $this->validateSchedulePost());
         }
 
-        if ($color < 0 || $color > 360) {
-            $errors[] = $this->l('No se ha guardado: el giro de color debe estar entre 0 y 360 grados.');
+        return $errors;
+    }
+
+    protected function saveTab($tab)
+    {
+        foreach ($this->getTabFields($tab) as $key) {
+            $value = Tools::getValue($key);
+
+            if (in_array($key, array('JOSRA_WAP_PHONE', 'JOSRA_WAP_ABOVE_TEXT', 'JOSRA_WAP_SEND_TEXT', 'JOSRA_WAP_OFFLINE_MSG', 'JOSRA_WAP_OFFLINE_URL'))) {
+                Configuration::updateValue($key, trim($value));
+            } else {
+                Configuration::updateValue($key, (int) $value);
+            }
         }
 
-        if ($offlineUrl !== '' && !$this->isValidOfflineUrl($offlineUrl)) {
-            $errors[] = $this->l('No se ha guardado: el enlace fuera de horario debe empezar por / o por http:// o https://.');
+        if ($tab !== 'programacion') {
+            return;
         }
-
-        $scheduleErrors = $this->validateSchedulePost();
-        $errors = array_merge($errors, $scheduleErrors);
-
-        if (count($errors)) {
-            return $errors;
-        }
-
-        Configuration::updateValue('JOSRA_WAP_ENABLED', (int) Tools::getValue('JOSRA_WAP_ENABLED'));
-        Configuration::updateValue('JOSRA_WAP_PHONE', $phone);
-        Configuration::updateValue('JOSRA_WAP_ABOVE_TEXT', trim(Tools::getValue('JOSRA_WAP_ABOVE_TEXT')));
-        Configuration::updateValue('JOSRA_WAP_SEND_TEXT', trim(Tools::getValue('JOSRA_WAP_SEND_TEXT')));
-        Configuration::updateValue('JOSRA_WAP_SEND_URL', (int) Tools::getValue('JOSRA_WAP_SEND_URL'));
-        Configuration::updateValue('JOSRA_WAP_ICON', (int) Tools::getValue('JOSRA_WAP_ICON'));
-        Configuration::updateValue('JOSRA_WAP_ICON_SIZE', $size);
-        Configuration::updateValue('JOSRA_WAP_ICON_POS', (int) Tools::getValue('JOSRA_WAP_ICON_POS'));
-        Configuration::updateValue('JOSRA_WAP_ICON_COLOR', $color);
-        Configuration::updateValue('JOSRA_WAP_MOBILE_SCALE', $scale);
-        Configuration::updateValue('JOSRA_WAP_ANIMATE', (int) Tools::getValue('JOSRA_WAP_ANIMATE'));
-        Configuration::updateValue('JOSRA_WAP_SCHEDULE_ENABLED', (int) Tools::getValue('JOSRA_WAP_SCHEDULE_ENABLED'));
-        Configuration::updateValue('JOSRA_WAP_OFFLINE_MSG', trim(Tools::getValue('JOSRA_WAP_OFFLINE_MSG')));
-        Configuration::updateValue('JOSRA_WAP_OFFLINE_URL', $offlineUrl);
 
         $schedule = array();
         foreach ($this->days as $day) {
@@ -286,11 +324,9 @@ class JosraWhatsapp extends Module
             );
         }
         Configuration::updateValue('JOSRA_WAP_SCHEDULE', json_encode($schedule));
-
-        return array();
     }
 
-    /** Comprueba que en cada dia activo la hora de cierre sea posterior a la de apertura */
+    /** El cierre debe ser posterior a la apertura, y el turno 2 no puede pisar al 1 */
     protected function validateSchedulePost()
     {
         $errors = array();
@@ -321,7 +357,6 @@ class JosraWhatsapp extends Module
                         $labels[$day]
                     );
                 }
-
                 if ($t2From < $t1To) {
                     $errors[] = sprintf(
                         $this->l('No se ha guardado: en %s el segundo turno empieza antes de que acabe el primero.'),
@@ -388,25 +423,55 @@ class JosraWhatsapp extends Module
             . '&tab_module=' . $this->tab . '&module_name=' . $this->name;
     }
 
-    protected function renderForm()
+    /* ------------------------------------------------------------------
+     * Pestanas
+     * ------------------------------------------------------------------ */
+
+    protected function renderTabs($activeTab)
     {
         $settings = $this->getSettings();
-
-        $helper = new HelperForm();
-        $helper->module = $this;
-        $helper->name_controller = $this->name;
-        $helper->identifier = $this->identifier;
-        $helper->table = $this->name;
-        $helper->submit_action = 'submitJosraWhatsapp';
-        $helper->token = Tools::getAdminTokenLite('AdminModules');
-        $helper->currentIndex = $this->getBackOfficeUrl();
-        $helper->default_form_language = (int) $this->context->language->id;
-        $helper->allow_employee_form_lang = (int) $this->context->language->id;
-        $helper->title = $this->displayName;
-        $helper->show_toolbar = false;
-
-        $values = $settings;
         $schedule = $this->getSchedule();
+
+        $tabs = array(
+            array(
+                'id' => 'general',
+                'title' => $this->l('General'),
+                'icon' => 'icon-cogs',
+                'content' => $this->renderTabForm('general', $this->getFormGeneral(), $settings),
+            ),
+            array(
+                'id' => 'apariencia',
+                'title' => $this->l('Apariencia'),
+                'icon' => 'icon-picture',
+                'content' => $this->renderTabForm('apariencia', $this->getFormAppearance(), $settings),
+            ),
+            array(
+                'id' => 'programacion',
+                'title' => $this->l('Programacion'),
+                'icon' => 'icon-time',
+                'content' => $this->renderTabForm(
+                    'programacion',
+                    $this->getFormSchedule($schedule),
+                    $this->getScheduleValues($settings, $schedule)
+                ),
+            ),
+        );
+
+        $this->context->smarty->assign(array(
+            'josra_tabs' => $tabs,
+            'josra_active_tab' => $activeTab,
+            'josra_is_open_now' => $this->isOnSchedule($schedule),
+            'josra_schedule_on' => (int) $settings['JOSRA_WAP_SCHEDULE_ENABLED'],
+            'josra_now' => $this->getShopNow()->format('d/m/Y H:i'),
+        ));
+
+        return $this->fetchAdmin('configure.tpl');
+    }
+
+    protected function getScheduleValues($settings, $schedule)
+    {
+        $values = $settings;
+
         foreach ($this->days as $day) {
             $values['josra_day_enabled_' . $day] = (int) $schedule[$day]['enabled'];
             $values['josra_t1_from_' . $day] = $schedule[$day]['t1_from'];
@@ -415,17 +480,36 @@ class JosraWhatsapp extends Module
             $values['josra_t2_from_' . $day] = $schedule[$day]['t2_from'];
             $values['josra_t2_to_' . $day] = $schedule[$day]['t2_to'];
         }
+
+        return $values;
+    }
+
+    /** Un HelperForm por pestana: cada una guarda solo sus propios campos */
+    protected function renderTabForm($tab, $fieldsForm, $values)
+    {
+        $actions = array(
+            'general' => 'submitJosraGeneral',
+            'apariencia' => 'submitJosraApariencia',
+            'programacion' => 'submitJosraProgramacion',
+        );
+        $submitAction = $actions[$tab];
+
+        $helper = new HelperForm();
+        $helper->module = $this;
+        $helper->name_controller = $this->name;
+        $helper->identifier = $this->identifier;
+        $helper->table = $this->name . '_' . $tab;
+        $helper->submit_action = $submitAction;
+        $helper->token = Tools::getAdminTokenLite('AdminModules');
+        $helper->currentIndex = $this->getBackOfficeUrl();
+        $helper->default_form_language = (int) $this->context->language->id;
+        $helper->allow_employee_form_lang = (int) $this->context->language->id;
+        $helper->show_toolbar = false;
         $helper->fields_value = $values;
 
         // fields_form es protected en HelperForm (de 1.6 a 9):
         // se pasa como argumento a generateForm(), nunca por propiedad.
-        $fieldsForm = array(
-            $this->getFormGeneral(),
-            $this->getFormAppearance(),
-            $this->getFormSchedule($schedule),
-        );
-
-        return $helper->generateForm($fieldsForm);
+        return $helper->generateForm(array($fieldsForm));
     }
 
     protected function getSwitchValues()
@@ -459,6 +543,7 @@ class JosraWhatsapp extends Module
                         'name' => 'JOSRA_WAP_PHONE',
                         'required' => true,
                         'placeholder' => '34612345678',
+                        'class' => 'fixed-width-xl',
                         'desc' => $this->l('Con el prefijo del pais y sin espacios ni guiones. Ejemplo: 34612345678.'),
                     ),
                     array(
@@ -480,7 +565,7 @@ class JosraWhatsapp extends Module
                         'label' => $this->l('Anadir la URL de la pagina'),
                         'name' => 'JOSRA_WAP_SEND_URL',
                         'is_bool' => true,
-                        'desc' => $this->l('Anade al mensaje la direccion de la pagina desde la que escribe el cliente, para saber que producto esta mirando.'),
+                        'desc' => $this->l('Anade al mensaje la direccion desde la que escribe el cliente, para saber que producto esta mirando.'),
                         'values' => $this->getSwitchValues(),
                     ),
                 ),
@@ -491,7 +576,6 @@ class JosraWhatsapp extends Module
                         'name' => 'submitJosraWhatsappDefaults',
                         'title' => $this->l('Restaurar valores por defecto'),
                         'icon' => 'icon-refresh',
-                        'class' => 'pull-right',
                         'js' => 'return confirm(\''
                             . addslashes($this->l('Se perderan todos los ajustes actuales, incluido el horario. Continuar?'))
                             . '\');',
@@ -512,6 +596,12 @@ class JosraWhatsapp extends Module
                 'input' => array(
                     array(
                         'type' => 'html',
+                        'label' => $this->l('Vista previa'),
+                        'name' => 'josra_preview',
+                        'html_content' => $this->renderPreview(),
+                    ),
+                    array(
+                        'type' => 'html',
                         'label' => $this->l('Icono'),
                         'name' => 'josra_icon_picker',
                         'html_content' => $this->renderIconPicker(),
@@ -520,7 +610,7 @@ class JosraWhatsapp extends Module
                         'type' => 'text',
                         'label' => $this->l('Giro de color'),
                         'name' => 'JOSRA_WAP_ICON_COLOR',
-                        'class' => 'fixed-width-sm',
+                        'class' => 'fixed-width-sm josra-live',
                         'suffix' => $this->l('grados'),
                         'desc' => $this->l('0 verde original, 90 azul, 180 rosa, 220 rojo, 270 naranja.'),
                     ),
@@ -528,7 +618,7 @@ class JosraWhatsapp extends Module
                         'type' => 'text',
                         'label' => $this->l('Tamano del icono'),
                         'name' => 'JOSRA_WAP_ICON_SIZE',
-                        'class' => 'fixed-width-sm',
+                        'class' => 'fixed-width-sm josra-live',
                         'suffix' => 'px',
                         'desc' => $this->l('Entre 30 y 200 px. Por defecto 75.'),
                     ),
@@ -536,7 +626,7 @@ class JosraWhatsapp extends Module
                         'type' => 'text',
                         'label' => $this->l('Tamano en movil'),
                         'name' => 'JOSRA_WAP_MOBILE_SCALE',
-                        'class' => 'fixed-width-sm',
+                        'class' => 'fixed-width-sm josra-live',
                         'suffix' => '%',
                         'desc' => $this->l('Porcentaje del tamano normal en pantallas de menos de 768 px. Entre 30 y 100.'),
                     ),
@@ -607,6 +697,25 @@ class JosraWhatsapp extends Module
         );
     }
 
+    protected function renderPreview()
+    {
+        $settings = $this->getSettings();
+
+        $this->context->smarty->assign(array(
+            'josra_module_dir' => $this->_path,
+            'josra_prev_icon' => (int) $settings['JOSRA_WAP_ICON'],
+            'josra_prev_size' => (int) $settings['JOSRA_WAP_ICON_SIZE'],
+            'josra_prev_color' => (int) $settings['JOSRA_WAP_ICON_COLOR'],
+            'josra_prev_scale' => (int) $settings['JOSRA_WAP_MOBILE_SCALE'],
+            'josra_prev_size_mobile' => (int) round(
+                $settings['JOSRA_WAP_ICON_SIZE'] * $settings['JOSRA_WAP_MOBILE_SCALE'] / 100
+            ),
+            'josra_prev_text' => $settings['JOSRA_WAP_ABOVE_TEXT'],
+        ));
+
+        return $this->fetchAdmin('preview.tpl');
+    }
+
     protected function renderIconPicker()
     {
         $settings = $this->getSettings();
@@ -623,27 +732,16 @@ class JosraWhatsapp extends Module
 
     protected function renderScheduleGrid($schedule)
     {
-        $tz = Configuration::get('PS_TIMEZONE');
-        if (!$tz) {
-            $tz = 'Europe/Madrid';
-        }
-
         $this->context->smarty->assign(array(
             'josra_days' => $this->days,
             'josra_day_labels' => $this->getDayLabels(),
             'josra_schedule' => $schedule,
-            'josra_timezone' => $tz,
-            'josra_now' => $this->getShopNow()->format('d/m/Y H:i'),
-            'josra_is_open_now' => $this->isOnSchedule($schedule),
         ));
 
         return $this->fetchAdmin('schedule.tpl');
     }
 
-    /**
-     * setTemplate() y display() se comportan distinto entre versiones,
-     * asi que las plantillas de admin se cargan siempre por ruta absoluta.
-     */
+    /** display() y setTemplate() varian entre versiones: ruta absoluta y a correr */
     protected function fetchAdmin($template)
     {
         return $this->context->smarty->fetch(
@@ -651,9 +749,9 @@ class JosraWhatsapp extends Module
         );
     }
 
-    /* ------------------------------------------------------------------
+    /* ==================================================================
      * Front office
-     * ------------------------------------------------------------------ */
+     * ================================================================== */
 
     public function hookDisplayHeader($params)
     {
@@ -720,7 +818,6 @@ class JosraWhatsapp extends Module
                 $offlineMsg = $settings['JOSRA_WAP_OFFLINE_MSG'];
                 $offlineUrl = $settings['JOSRA_WAP_OFFLINE_URL'];
 
-                // Fuera de horario y sin nada que ofrecer: no se pinta el boton
                 if ($offlineMsg === '' && $offlineUrl === '') {
                     return '';
                 }
@@ -746,9 +843,9 @@ class JosraWhatsapp extends Module
         return $this->display(__FILE__, 'views/templates/front/button.tpl');
     }
 
-    /* ------------------------------------------------------------------
+    /* ==================================================================
      * Horario
-     * ------------------------------------------------------------------ */
+     * ================================================================== */
 
     /** Hora actual segun la zona horaria configurada en la tienda */
     public function getShopNow()
