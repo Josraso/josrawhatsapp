@@ -1,6 +1,6 @@
 <?php
 /**
- * JosraWhatsapp 1.1.0 -> 1.2.0
+ * JosraWhatsapp 1.1.0 -> 1.2.1
  * - Registra el hook displayFooter, necesario en PrestaShop 1.6.
  * - Crea el ajuste nuevo del tamano en movil.
  * - Completa el horario guardado con las claves que falten.
@@ -9,7 +9,7 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-function upgrade_module_1_2_0($module)
+function upgrade_module_1_2_1($module)
 {
     if (!$module->isRegisteredInHook('displayFooter')) {
         $module->registerHook('displayFooter');

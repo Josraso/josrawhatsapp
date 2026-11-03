@@ -26,7 +26,7 @@ class JosraWhatsapp extends Module
     {
         $this->name = 'josrawhatsapp';
         $this->tab = 'front_office_features';
-        $this->version = '1.2.0';
+        $this->version = '1.2.1';
         $this->author = 'josraso';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -417,13 +417,15 @@ class JosraWhatsapp extends Module
         }
         $helper->fields_value = $values;
 
-        $helper->fields_form = array(
+        // fields_form es protected en HelperForm (de 1.6 a 9):
+        // se pasa como argumento a generateForm(), nunca por propiedad.
+        $fieldsForm = array(
             $this->getFormGeneral(),
             $this->getFormAppearance(),
             $this->getFormSchedule($schedule),
         );
 
-        return $helper->generateForm($helper->fields_form);
+        return $helper->generateForm($fieldsForm);
     }
 
     protected function getSwitchValues()
