@@ -28,7 +28,7 @@ class JosraWhatsapp extends Module
     {
         $this->name = 'josrawhatsapp';
         $this->tab = 'front_office_features';
-        $this->version = '1.3.2';
+        $this->version = '1.3.3';
         $this->author = 'josraso';
         $this->need_instance = 0;
         $this->bootstrap = true;
