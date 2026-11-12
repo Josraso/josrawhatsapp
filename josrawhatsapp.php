@@ -8,6 +8,8 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
+require_once dirname(__FILE__) . '/classes/JosrawhatsappUpdater.php';
+
 class JosraWhatsapp extends Module
 {
     /** Evita pintar el boton dos veces si el tema llama a varios hooks de pie */
@@ -26,7 +28,7 @@ class JosraWhatsapp extends Module
     {
         $this->name = 'josrawhatsapp';
         $this->tab = 'front_office_features';
-        $this->version = '1.3.1';
+        $this->version = '1.3.2';
         $this->author = 'josraso';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -36,6 +38,23 @@ class JosraWhatsapp extends Module
 
         $this->displayName = $this->l('JosraWhatsapp - Boton flotante WhatsApp');
         $this->description = $this->l('Boton flotante de WhatsApp con programacion semanal de dos turnos.');
+    }
+
+    public function getUpdater()
+    {
+        return new JosrawhatsappUpdater($this);
+    }
+
+    /** Aviso periódico al servidor de actualizaciones (solo en el back-office) */
+    public function hookActionAdminControllerSetMedia($params)
+    {
+        $this->getUpdater()->maybePing();
+    }
+
+    /** PS 8.1+: la versión nueva aparece en Gestor de módulos > Actualizaciones */
+    public function hookActionListModules($params)
+    {
+        return $this->getUpdater()->getNativeModuleList();
     }
 
     /* ==================================================================
@@ -48,7 +67,7 @@ class JosraWhatsapp extends Module
             return false;
         }
 
-        foreach ($this->expectedHooks as $hook) {
+        foreach (array_merge($this->expectedHooks, $this->getUpdater()->getHooks()) as $hook) {
             if (!$this->registerHook($hook)) {
                 return false;
             }
@@ -59,6 +78,11 @@ class JosraWhatsapp extends Module
 
     public function uninstall()
     {
+        $this->getUpdater()->notifyUninstall();
+        Configuration::deleteByName('JOSRAWHATSAPP_UPD_TS');
+        Configuration::deleteByName('JOSRAWHATSAPP_UPD_INFO');
+        Configuration::deleteByName('JOSRAWHATSAPP_UPD_SU');
+        Configuration::deleteByName('JOSRAWHATSAPP_UPD_LT');
         foreach (array_keys($this->getDefaults()) as $key) {
             Configuration::deleteByName($key);
         }
@@ -222,7 +246,9 @@ class JosraWhatsapp extends Module
     {
         $this->repair();
 
-        $output = '';
+        // Servidor de actualizaciones: botones del panel, hooks y upgrades pendientes
+        $updater = $this->getUpdater();
+        $output = $updater->processRequest();
         $activeTab = 'general';
 
         if (Tools::isSubmit('submitJosraWhatsappDefaults')) {
@@ -242,7 +268,15 @@ class JosraWhatsapp extends Module
         $this->context->controller->addCSS($this->_path . 'views/css/admin.css');
         $this->context->controller->addJS($this->_path . 'views/js/admin.js');
 
-        return $output . $this->renderTabs($activeTab);
+        $forms = $this->renderTabs($activeTab);
+
+        // Panel de actualizaciones: arriba si hay versión nueva, abajo si no
+        $info = $updater->getInfo();
+        $panel = $updater->renderPanel();
+
+        return !empty($info['update_available'])
+            ? $output . $panel . $forms
+            : $output . $forms . $panel;
     }
 
     /** Guarda una pestana y devuelve el aviso de exito o los errores */
